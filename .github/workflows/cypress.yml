@@ -99,6 +99,12 @@ jobs:
           export CYPRESS_DEFAULT_COMMAND_TIMEOUT=10000
           yarn install
           yarn test
+      
+      - name: Run testRigor Tests
+        run: |
+          docker exec os_dev_php80 bash -c \
+          'command -v npm >/dev/null || (curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs) && \
+          . src/test/testRigor/run_testrigor_tests.sh'
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
