@@ -1,0 +1,57 @@
+name: end-to-end
+
+on:
+  push:
+    branches:
+      - add-e2e-testRigor-tests
+  pull_request:
+
+jobs:
+  installation:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+
+    services:
+      mysql:
+        image: mariadb:10.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          php7.4 -f /usr/bin/composer install -d src
+          php7.4 -f /usr/bin/composer install -d devTools/core
+
+      - name: Install OrangeHRM 
+        run: |
+          php devTools/core/console.php i:reset
+          git checkout installer/cli_install_config.yaml
+          sed -i 's/useSameDbUserForOrangeHRM: y/useSameDbUserForOrangeHRM: n/g' installer/cli_install_config.yaml
+          sed -i 's/orangehrmDatabaseUser: ~/orangehrmDatabaseUser: orangehrm_2/g' installer/cli_install_config.yaml
+          sed -i 's/orangehrmDatabasePassword: ~/orangehrmDatabasePassword: 0rang3h!m/g' installer/cli_install_config.yaml
+          sed -i 's/databaseName: orangehrm_mysql/databaseName: db/g' installer/cli_install_config.yaml
+          php7.4 installer/cli_install.php
+
+          # php devTools/core/console.php i:reset
+          # git checkout installer/cli_install_config.yaml
+          # sed -i 's/isExistingDatabase: n/isExistingDatabase: y/g' installer/cli_install_config.yaml
+          # sed -i 's/privilegedDatabaseUser: root/privilegedDatabaseUser: orangehrm_2/g' installer/cli_install_config.yaml
+          # sed -i 's/privilegedDatabasePassword: root/privilegedDatabasePassword: 0rang3h!m/g' installer/cli_install_config.yaml
+          # sed -i 's/databaseName: orangehrm_mysql/databaseName: db/g' installer/cli_install_config.yaml
+          # mysql -u root -proot -h 127.0.0.1 -e "CREATE DATABASE db;"
+          # php7.4 installer/cli_install.php
+
+          php installer/console install:on-new-database
+
+          curl -LI http://localhost/web/index.php/auth/login
+          curl -LI http://127.0.0.1:80 
+
+      - name: Check dev tool reinstall command
+        run: |
+          php devTools/core/console.php i:reinstall

@@ -90,6 +90,11 @@ jobs:
           docker exec os_dev_php80 bash -c 'chmod -R 777 src/config'
           docker exec os_dev_php80 bash -c 'php installer/cli_install.php'
 
+      - name: Run curl
+        run: |
+          curl -LI http://0.0.0.0/web/index.php/auth/login
+          curl -LI http://0.0.0.0:80 
+
       - name: Run tests
         run: |
           docker exec os_dev_php80 bash -c 'php src/test/functional/tools/prepare.php'
