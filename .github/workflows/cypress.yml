@@ -91,6 +91,7 @@ jobs:
           docker exec os_dev_php80 bash -c 'php installer/cli_install.php'
 
       - name: Run tests
+        if: github.ref == 'refs/heads/main'
         run: |
           docker exec os_dev_php80 bash -c 'php src/test/functional/tools/prepare.php'
           cd html/src/test/functional
@@ -99,6 +100,16 @@ jobs:
           export CYPRESS_DEFAULT_COMMAND_TIMEOUT=10000
           yarn install
           yarn test
+      
+      - name: Run testRigor tests
+        run: |
+          docker logs os_dev_nginx
+          docker exec os_dev_nginx bash -c "curl -I http://php80/web/index.php || echo 'Failed to reach http://php80'"
+          docker cp "$WORKSPACE_DIR"/src/test/testRigor/testcases os_dev_nginx:/tmp/testcases
+          docker cp "$WORKSPACE_DIR"/src/test/testRigor/rules os_dev_nginx:/tmp/rules
+          docker cp "$WORKSPACE_DIR"/src/test/testRigor/run_testrigor_tests.sh os_dev_nginx:/tmp/run_testrigor_tests.sh
+          docker exec os_dev_nginx bash -c "chmod +x /tmp/run_testrigor_tests.sh"
+          docker exec os_dev_nginx bash -c "bash /tmp/run_testrigor_tests.sh"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
