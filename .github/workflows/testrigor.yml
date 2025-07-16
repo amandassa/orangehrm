@@ -1,0 +1,127 @@
+name: TestRigor E2E Tests
+
+on:
+  push:
+    branches: [ main, develop, add-testRigor-tests ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      suite_id:
+        description: 'TestRigor Suite ID'
+        required: false
+        type: string
+      test_environment:
+        description: 'Test Environment'
+        required: false
+        default: 'CI'
+        type: choice
+        options:
+        - CI
+        - Staging
+        - Production
+
+jobs:
+  testrigor-tests:
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Setup OrangeHRM for TestRigor
+        run: |
+          chmod +x setup-for-testrigor.sh
+          ./setup-for-testrigor.sh
+
+      - name: Wait for application to be fully ready
+        run: |
+          timeout=60
+          counter=0
+          while ! curl -s http://localhost/web/index.php/auth/login | grep -q "OrangeHRM"; do
+            if [ $counter -ge $timeout ]; then
+              echo "Application failed to start properly"
+              docker-compose logs
+              exit 1
+            fi
+            echo "Waiting for application to be ready... ($counter/$timeout)"
+            sleep 3
+            counter=$((counter + 3))
+          done
+          echo "Application is ready for testing!"
+
+      - name: Run TestRigor Tests
+        env:
+          SUITE_ID: ${{ github.event.inputs.suite_id || secrets.TESTRIGOR_SUITE_ID }}
+          AUTH_TOKEN: ${{ secrets.TESTRIGOR_AUTH_TOKEN }}
+          TEST_ENVIRONMENT: ${{ github.event.inputs.test_environment || 'CI' }}
+        run: |
+          if [ -z "$SUITE_ID" ]; then
+            echo "ERROR: TestRigor Suite ID is not set. Please configure TESTRIGOR_SUITE_ID secret or provide suite_id input."
+            exit 1
+          fi
+          
+          if [ -z "$AUTH_TOKEN" ]; then
+            echo "ERROR: TestRigor Auth Token is not set. Please configure TESTRIGOR_AUTH_TOKEN secret."
+            exit 1
+          fi
+          
+          echo "Running TestRigor tests with Suite ID: $SUITE_ID"
+          cd src/test/testRigor
+          chmod +x run_testrigor_tests.sh
+          ./run_testrigor_tests.sh
+
+      - name: Upload TestRigor Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testrigor-results-${{ github.run_number }}
+          path: |
+            src/test/testRigor/results/
+            src/test/testRigor/logs/
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v || true
+          docker system prune -f || true
+
+      - name: Comment PR with TestRigor Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let comment = `## TestRigor E2E Test Results\n\n`;
+            comment += `**Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            comment += `**Commit:** ${{ github.sha }}\n`;
+            comment += `**Environment:** ${{ github.event.inputs.test_environment || 'CI' }}\n\n`;
+            
+            // Check if tests passed or failed based on workflow status
+            const conclusion = '${{ job.status }}';
+            if (conclusion === 'success') {
+              comment += `**Status:** Tests Passed\n`;
+            } else {
+              comment += `**Status:** Tests Failed\n`;
+            }
+            
+            comment += `\n**Artifacts:** Check the uploaded artifacts for detailed test results and logs.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            }); 
