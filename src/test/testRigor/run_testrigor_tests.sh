@@ -1,7 +1,6 @@
 #!/bin/bash
 
-apt-get install -y nodejs
-
+# Install testrigor CLI if not present
 which testrigor || npm install -g testrigor-cli --verbose
 
 testrigor --version
@@ -21,12 +20,13 @@ LOCALHOST_URL="http://127.0.0.1"
 TEST_CASES_PATH="src/tests/testRigor/testcases/**/*.txt"
 RULES_PATH="src/tests/testRigor/rules/**/*.txt"
 
-# # php7.4 -S 127.0.0.1:80 -t . &
-# php7.4 installer/cli_install.php
-# mysqldump -V
-# php7.4 devTools/core/console.php i:create-test-db -p root --dump-options="--column-statistics=0"
-# sudo service apache2 restart
-# curl "$LOCALHOST_URL"
+# Setup OrangeHRM for testing
+# php -S 127.0.0.1:80 -t . &
+php installer/cli_install.php
+mysqldump -V
+php devTools/core/console.php i:create-test-db -p root --dump-options="--column-statistics=0"
+sudo service apache2 restart
+curl "$LOCALHOST_URL"
 
 # Command to run the tests using the testRigor CLI
 testrigor test-suite run "$ORANGEHRM_TEST_SUITE_ID" --token "$ORANGEHRM_AUTH_TOKEN" --localhost --url "$LOCALHOST_URL" --test-cases-path "$TEST_CASES_PATH" --rules-path "$RULES_PATH" --branch "$BRANCH_NAME" --commit "$COMMIT_NAME"
