@@ -99,6 +99,30 @@ jobs:
           name: logs-${{ matrix.database.name }}
           path: src/log
 
+      - name: Verify Node.js installation
+        run: |
+          echo "Checking Node.js version:"
+          node --version
+          echo "Checking npm version:"
+          npm --version
+
+      - name: Start OrangeHRM frontend and verify accessibility
+        run: |
+          cd src/client
+          echo "Starting OrangeHRM frontend in background..."
+          yarn serve &
+          FRONTEND_PID=$!
+          
+          echo "Waiting for frontend to start..."
+          sleep 30
+          
+          echo "Attempting to curl OrangeHRM frontend:"
+          curl -f http://localhost:8080 || echo "Frontend not accessible on port 8080"
+          curl -f http://localhost:3000 || echo "Frontend not accessible on port 3000"
+          
+          echo "Stopping frontend process..."
+          kill $FRONTEND_PID || true
+
       - name: Stop LDAP container
         if: "${{ github.event_name == 'push' && always() }}"
         run: docker stop openldap
